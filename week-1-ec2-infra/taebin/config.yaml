@@ -1,0 +1,37 @@
+ec2:
+  - name: test
+    instance_type: t2.micro
+    ami: <ami-id> # AMI ID 입력
+    subnet_id: <subnet-id> # 서브넷 ID 입력
+    associate_public_ip_address: true
+    role_name: ""
+    user_data: |
+      #!/bin/bash
+      sudo su
+      yum install -y httpd
+      sudo systemctl start httpd
+      sudo systemctl enable httpd
+      echo "AWS Study - Hello my name is ${var.name}" > /var/www/html/index.html
+    security_group_ids: <security-group-id> # 보안 그룹 ID 입력
+    policy_arns:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+security_group:
+  - name: ec2-sg
+    vpc_id: ssss # VPC ID 입력
+    ingress_rules:
+      http:
+        ingress_from_port: 80
+        ingress_to_port: 80
+        ingress_protocol: tcp
+        cidr_blocks: ["0.0.0.0/0"]
+      https:
+        ingress_from_port: 443
+        ingress_to_port: 443
+        ingress_protocol: tcp
+        cidr_blocks: ["0.0.0.0/0"]
+    egress_rules:
+      all:
+        egress_from_port: 0
+        egress_to_port: 0
+        egress_protocol: "-1"
+        cidr_blocks: ["0.0.0.0/0"]
