@@ -1,0 +1,79 @@
+s3:
+  - name: <s3 bucket name>
+
+ec2: []
+
+security_group:
+  - name: ec2-sg
+    vpc_id: <vpc id> # VPC ID 입력
+    ingress_rules:
+      http:
+        ingress_from_port: 80
+        ingress_to_port: 80
+        ingress_protocol: tcp
+        cidr_blocks: ["172.31.0.0/16"]
+      https:
+        ingress_from_port: 443
+        ingress_to_port: 443
+        ingress_protocol: tcp
+        cidr_blocks: ["172.31.0.0/16"]
+      allow-alb-http:
+        ingress_from_port: 80
+        ingress_to_port: 80
+        ingress_protocol: tcp
+        security_group_id: "<alb-sg security group id>"
+    egress_rules:
+      all:
+        egress_from_port: 0
+        egress_to_port: 0
+        egress_protocol: "-1"
+        cidr_blocks: ["0.0.0.0/0"]
+  - name: alb-sg
+    vpc_id: <vpc id> # VPC ID 입력
+    ingress_rules:
+      http:
+        ingress_from_port: 80
+        ingress_to_port: 80
+        ingress_protocol: tcp
+        cidr_blocks: ["<cidr block>"]
+    egress_rules:
+      all:
+        egress_from_port: 0
+        egress_to_port: 0
+        egress_protocol: "-1"
+        cidr_blocks: ["0.0.0.0/0"]
+auto-scaling:
+  - name: <auto-scaling group name>
+    image_id: <ami id>
+    instance_type: t3.micro
+    user_data: |
+      #!/bin/bash
+      sudo yum update
+      sudo yum install -y python3-flask python3-pip
+      sudo pip3 install gunicorn boto3
+      sudo wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1qOKurb6MjYu2up6FcCl-B0qKrocG25OI' -O /home/ec2-user/hw2_skeleton.tar
+      tar -xvf /home/ec2-user/hw2_skeleton.tar -C /home/ec2-user/
+      sudo sed -i 's/YOUR_BUCKET_NAME/hw2-bucket-taebin/' /home/ec2-user/hw2_skeleton/app.py
+      sudo sed -i 's/<h2>([^<]*YOUR NAME, YOUR STUDENT ID[^<]*)<\/h2>/<h2>username, student id<\/h2>/g' /home/ec2-user/hw2_skeleton/templates/index.html
+      cd /home/ec2-user/hw2_skeleton
+      sudo FLASK_ENV=development gunicorn -b 0.0.0.0:80 app:app
+    min_size: 2
+    max_size: 5
+    vpc_zone_identifier: ["<subnet id>"]
+    security_groups: ["<ec2-sg security group id>"]
+    health_check_type: ELB
+    associate_public_ip_address: true
+    target_group_arns:
+      - "<target group arn>"
+    policy_arns:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+elb:
+  - name: web-server
+    security_groups: ["<alb-sg security group id>"]
+    subnets: ["<subnet id>"]
+    port: 80
+    protocol: TCP
+    target_type: instance
+    vpc_id: <insert vpc id>
