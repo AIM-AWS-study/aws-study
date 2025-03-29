@@ -1,0 +1,119 @@
+s3:
+  - name: <s3 bucket name>
+
+ec2: []
+
+rds:
+  - identifier: rds-instance
+    instance_class: db.t4g.micro
+    engine: mysql
+    engine_version: 8.0.40
+    username: root
+    password: 12345678
+    db_name: wordpress
+    family: mysql8.0
+    subnet_ids: ["<subnet id 1>", "<subnet id 2>"]
+    parameter_group_name: mysql8.0
+    vpc_security_group_ids: ["<rds-sg security group id>"]
+    parameters:
+      character_set_server: utf8mb4
+      character_set_client: utf8mb4
+      character_set_connection: utf8mb4
+      character_set_database: utf8mb4
+      character_set_filesystem: utf8mb4
+      character_set_results: utf8mb4
+      collation_connection: utf8mb4_general_ci
+      collation_server: utf8mb4_general_ci
+
+security_group:
+  - name: ec2-sg
+    vpc_id: <vpc id> # VPC ID 입력
+    ingress_rules:
+      http:
+        ingress_from_port: 80
+        ingress_to_port: 80
+        ingress_protocol: tcp
+        cidr_blocks: ["172.31.0.0/16"]
+      https:
+        ingress_from_port: 443
+        ingress_to_port: 443
+        ingress_protocol: tcp
+        cidr_blocks: ["172.31.0.0/16"]
+      allow-alb-http:
+        ingress_from_port: 80
+        ingress_to_port: 80
+        ingress_protocol: tcp
+        security_group_id: "<alb-sg security group id>"
+    egress_rules:
+      all:
+        egress_from_port: 0
+        egress_to_port: 0
+        egress_protocol: "-1"
+        cidr_blocks: ["0.0.0.0/0"]
+  - name: alb-sg
+    vpc_id: <vpc id> # VPC ID 입력
+    ingress_rules:
+      http:
+        ingress_from_port: 80
+        ingress_to_port: 80
+        ingress_protocol: tcp
+        cidr_blocks: ["<cidr block>"]
+    egress_rules:
+      all:
+        egress_from_port: 0
+        egress_to_port: 0
+        egress_protocol: "-1"
+        cidr_blocks: ["0.0.0.0/0"]
+  - name: rds-sg
+    vpc_id: <vpc id> # VPC ID 입력
+    ingress_rules:
+      mysql:
+        ingress_from_port: 3306
+        ingress_to_port: 3306
+        ingress_protocol: tcp
+        cidr_blocks: ["172.31.0.0/16"]
+    egress_rules:
+      all:
+        egress_from_port: 0
+        egress_to_port: 0
+        egress_protocol: "-1"
+        cidr_blocks: ["0.0.0.0/0"]
+auto-scaling:
+  - name: <auto-scaling group name>
+    image_id: <ami id>
+    instance_type: t3.micro
+    user_data: |
+      #!/bin/bash
+      sudo yum update -y
+      sudo amazon-linux-extras enable php7.4
+      sudo yum install -y php php-mysqlnd httpd mariadb
+      sudo wget https://ko.wordpress.org/wordpress-5.7.8-ko_KR.tar.gz
+      sudo tar xvfz wordpress-5.7.8-ko_KR.tar.gz
+      sudo cp -a ./wordpress/* /var/www/html/
+      sudo chown apache.apache /var/www/html/*
+      sudo cp /var/www/html/wp-config-sample.php /var/www/html/wp-config.php
+      sudo sed -i 's/database_name_here/wordpress/g' /var/www/html/wp-config.php
+      sudo sed -i 's/username_here/root/g' /var/www/html/wp-config.php
+      sudo sed -i 's/password_here/12345678/g' /var/www/html/wp-config.php
+      sudo sed -i 's/localhost/<rds instance endpoint>/g' /var/www/html/wp-config.php
+      sudo systemctl enable httpd
+      sudo systemctl start httpd
+    min_size: 2
+    max_size: 5
+    vpc_zone_identifier: ["<subnet id 1>", "<subnet id 2>"]
+    security_groups: ["<ec2-sg security group id>"]
+    health_check_type: ELB
+    associate_public_ip_address: true
+    target_group_arns:
+      - "<target group arn>"
+    policy_arns:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+elb:
+  - name: web-server
+    security_groups: ["<alb-sg security group id>"]
+    subnets: ["<subnet id>"]
+    port: 80
+    protocol: TCP
+    target_type: instance
+    vpc_id: <insert vpc id>
